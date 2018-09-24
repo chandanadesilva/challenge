@@ -1,0 +1,4 @@
+# log docker rescourse metrics every 10 seconds:
+log mandatory on every 10 seconds {
+	docker
+}
