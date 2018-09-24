@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Challenge Docker Node, running nginix container
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+  Subnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+  AttachGateway:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+  Route:
+    Type: 'AWS::EC2::Route'
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  SubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet
+      RouteTableId: !Ref RouteTable
+  IPAddress:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref ChallengeHost
+  ChallengeGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Enable HHTP and SSH access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+  ChallengeHost:
+    Type: 'AWS::EC2::Instance'
+    DependsOn: AttachGateway
+    Properties:
+      ImageId: 'ami-00e17d1165b9dd3ec'
+      InstanceType: t2.micro
+      KeyName: chandana
+      Tags:
+        -
+          Key: Name
+          Value: challenge_host
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref ChallengeGroup
+          AssociatePublicIpAddress: 'true'
+          DeviceIndex: '0'
+          DeleteOnTermination: 'true'
+          SubnetId: !Ref Subnet
+      UserData:
+        Fn::Base64:
+            |
+              #cloud-config:
+              packages:
+                - python2-pip
+                - iptables-services
+                - docker
+              runcmd:
+                - [service, iptables, start]
+                - [/sbin/iptables, -A, INPUT, -p, tcp, --dport, 80, -j, ACCEPT ]
+                - [/sbin/iptables, -A, INPUT, -p, tcp, --dport, 22, -j, ACCEPT ]
+                - [/sbin/iptables, -A, INPUT, -j, REJECT ]
+                - [/sbin/iptables-save ]
+                - [pip, install, docker-py ]
+                - [service, docker, start ]
+Outputs:
+  ChallengeHostEIP:
+    Description: The External IP Address of the challenge Host
+    Value: !GetAtt ChallengeHost.PublicIp

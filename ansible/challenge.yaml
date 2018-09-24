@@ -1,0 +1,48 @@
+---
+
+- name: provision stack
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+  - name: challenge cfn stack
+    cloudformation: >
+      stack_name="challenge" state=present
+      region=ap-southeast-2 disable_rollback=true
+      template=../cfn/challenge-cfn.yml
+    register: stack
+
+  - name: show stack outputs
+    debug: msg="Stack Outputs {{stack.stack_outputs.ChallengeHostEIP}}"
+    
+  - name: add the new ec2 instance to the inventory
+    add_host:
+      hostname: "{{stack.stack_outputs.ChallengeHostEIP}}"
+      groups: ec2
+      
+- name: use the new host
+  hosts: ec2
+  remote_user: ec2-user
+  
+  tasks:
+  - name: run an ngnix container
+    become: yes
+    become_user: root
+    docker_container:
+      image: "nginx:latest"
+      name: challenge
+      pull: yes
+      ports: "80:80"
+      state: started
+      
+- name: use localhost
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  
+  tasks:
+  - name: find the most frequent word
+    shell: |
+      curl -qs http://52.65.145.124/| tr  '.|\/|!|<|>|\"' ' ' | awk '{for(i=1;i<=NF;i++) a[$i]++} END {for(k in a) print k,a[k]}' | sort -rn -k 2 | head -1
+           
