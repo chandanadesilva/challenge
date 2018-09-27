@@ -25,10 +25,78 @@
       groups: ec2
       
 - name: use the new host
-  hosts: ec2
+  hosts: hostvars['localhost']['stack.stack_outputs.ChallengeHostEIP']
   remote_user: ec2-user
   
   tasks:
+  - name: show fact
+    debug: msg="Challenge Host IPAddr {{ansible_default_ipv4.address}}"
+    
+  - name: ensure Docker is running
+    become: yes
+    become_user: root
+    service:
+      name: docker
+      enabled: yes
+      state: started
+      
+  - name: install pcp
+    become: yes
+    become_user: root
+    package:
+      name: pcp
+      state: present
+        
+  - name: install pcp pmda for docker
+    become: yes
+    become_user: root
+    package:
+      name: pcp-pmda-docker
+      state: present
+      
+  - name: set docker pmda to auto start
+    become: yes
+    become_user: root
+    copy:
+      content: '# instll docker pmda'
+      dest: /var/lib/pcp/pmdas/docker/.NeedInstall
+      
+  - name: configure pmlogger for docker
+    become: yes
+    become_user: root
+    copy:
+      src: files/config.pmlog.docker
+      dest: /var/lib/pcp/config/pmlogger/config.docker    
+      owner: root
+      group: root
+      mode: 0644
+                    
+  - name: update pmlogger control for docker
+    become: yes
+    become_user: root
+    copy:
+      content: "LOCALHOSTNAME n   n PCP_LOG_DIR/pmlogger/docker  -r -T24h10m -c config.docker\n"
+      dest: /etc/pcp/pmlogger/control.d/docker
+      owner: root
+      group: root
+      mode: 0644
+                    
+  - name: ensure pmcd is running
+    become: yes
+    become_user: root
+    service:
+      name: pmcd
+      enabled: yes
+      state: started
+                    
+  - name: ensure pmlogger is running
+    become: yes
+    become_user: root
+    service:
+      name: pmlogger
+      enabled: yes
+      state: started
+  
   - name: run an ngnix container
     become: yes
     become_user: root
