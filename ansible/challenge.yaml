@@ -25,13 +25,10 @@
       groups: ec2
       
 - name: use the new host
-  hosts: hostvars['localhost']['stack.stack_outputs.ChallengeHostEIP']
+  hosts: ec2
   remote_user: ec2-user
   
   tasks:
-  - name: show fact
-    debug: msg="Challenge Host IPAddr {{ansible_default_ipv4.address}}"
-    
   - name: ensure Docker is running
     become: yes
     become_user: root
